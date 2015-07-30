@@ -38,7 +38,7 @@ class Bullet:
         self.mouse = mouse
         self.dx,self.dy = self.mouse
     def move(self):
-        distance = [self.dx - self.x, self.dy, self.y]
+        distance = [self.dx - self.x, self.dy - self.y]
         norm = math.sqrt(distance[0] ** 2 + distance[1] ** 2)
         direction = [distance[0] / norm, distance[1] / norm]
         bullet_vector = [direction[0] * self.speed, direction[1] * self.speed]
