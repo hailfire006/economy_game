@@ -1,0 +1,151 @@
+import pygame
+import time
+import sys
+import math
+import random
+pygame.init()
+
+data = [(5,0.5,20,"right"),(5,0.5,20,"left"),(5,1,10,"right"),(5,1,10,"left")]
+objects = []
+screen_width = 650
+screen_height = 650
+clock = pygame.time.Clock()
+screen = pygame.display.set_mode((screen_width, screen_height),0,32)
+
+#globals
+speed = 4
+road_x = 200
+road_width = 200
+turn_number = 0
+road_count = 0
+road_since_last_turn = 0
+distance_traveled = 0
+class Road:
+    def __init__(self,x,y,width,height):
+        global road_count
+        global road_since_last_turn
+        road_since_last_turn +=1
+        road_count += 1
+        self.x = x
+        self.y = y
+        self.width = width
+        self.height = height
+        self.name = "road"
+        self.exists = True
+    def draw(self):
+        self.rect = pygame.Rect((self.x,self.y),(self.width, self.height))
+        pygame.draw.rect(screen,(100,100,100),self.rect)
+        
+class Player:
+    def __init__(self,x,y,width,height):
+        self.x = x
+        self.y = y
+        self.width = width
+        self.height = height
+        self.name = "player"
+        self.exists = True
+        self.handling = 5
+
+    def turn(self,speedx):
+        self.x += (speedx * self.handling)
+        
+    def draw(self):
+        self.rect = pygame.Rect((self.x,self.y),(30, 30))
+        pygame.draw.rect(screen,(255,0,0),self.rect)
+
+############################################################################
+############################################################################
+############################################################################
+def check_for_turns():
+    global road_since_last_turn
+    try:
+        road,sharpness,length,direction = data[turn_number]
+        if road_since_last_turn >= road:
+            generate_turns(direction,sharpness)
+            if (road_since_last_turn - road) >= length:
+                road_since_last_turn = 0
+                global turn_number
+                turn_number += 1
+    except IndexError:
+        pass
+def generate_turns(direction,sharpness):
+    global road_x
+    if direction == "left":
+        road_x -= sharpness
+    elif direction == "right":
+        road_x += sharpness
+
+def move_road():
+    for i in objects:
+        if i.name == "road":
+            i.y += speed
+    global distance_traveled
+    distance_traveled += speed
+    print distance_traveled
+
+def collect_trash():
+    for i in objects:
+        if i.exists == False:
+            objects.remove(i)
+            
+def spawn_road(driving):
+    if driving:    
+        for i in objects:
+            if i.name == "road":
+                if i.y == 0:
+                    road = Road(road_x,-20,road_width,20)
+                    objects.append(road)
+    elif not driving:
+        road = Road(road_x,-20,road_width,20)
+        objects.append(road)
+        
+def despawn_road():
+    for i in objects:
+        if i.y > screen_height + 300:
+            i.exists = False
+
+def handle_events():
+    keys_pressed = pygame.key.get_pressed()
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            quit() 
+
+    for i in objects:
+        if i.name == "player":
+            player = i
+            if keys_pressed[pygame.K_LEFT] or keys_pressed[pygame.K_a]:
+                player.turn(-1)
+            if keys_pressed[pygame.K_RIGHT] or keys_pressed[pygame.K_d]:
+                player.turn(1)
+            if keys_pressed[pygame.K_UP] or keys_pressed[pygame.K_w]:
+                global speed
+                speed += .1
+            if keys_pressed[pygame.K_DOWN] or keys_pressed[pygame.K_s]:
+                global speed
+                speed -= .1
+
+def draw():
+    screen.fill((0,180,0))
+    for i in objects:
+        if i.exists:
+            if i.name != "player":
+                i.draw()
+    for i in objects:
+        if i.name == "player":
+            i.draw()
+    pygame.display.update()
+    clock.tick(60)
+    
+def run():
+    player = Player(200,200,10,10)
+    objects.append(player)
+    spawn_road(False)
+    while True:
+        check_for_turns()
+        move_road()
+        spawn_road(True)
+        despawn_road()
+        handle_events()
+        collect_trash()
+        draw()
+run()
