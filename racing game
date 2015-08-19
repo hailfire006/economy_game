@@ -3,9 +3,9 @@ import time
 import sys
 import math
 import random
+from racing_maps import data
 pygame.init()
 
-data = [(5,0.5,20,"right"),(5,0.5,20,"left"),(5,1,10,"right"),(5,1,10,"left")]
 objects = []
 screen_width = 650
 screen_height = 650
@@ -92,8 +92,11 @@ def spawn_road(driving):
     if driving:    
         for i in objects:
             if i.name == "road":
-                if i.y == 0:
-                    road = Road(road_x,-20,road_width,20)
+                if (i.y >= 0) and (i.y <= 20):
+                    for j in objects:
+                        if j.y < i.y:
+                            return
+                    road = Road(road_x,(i.y - 20),road_width,20)
                     objects.append(road)
     elif not driving:
         road = Road(road_x,-20,road_width,20)
