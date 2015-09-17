@@ -1,0 +1,260 @@
+import pygame
+import time
+import sys
+import math
+import random
+import pickle
+import rpg_dialogue
+clock = pygame.time.Clock()
+screen_width = 800
+screen_height = 600
+window = pygame.display.set_mode((screen_width,screen_height),0,32)
+objects = []
+npclist = []
+offsetx = 0
+offsety = 0
+grid_tile_size = .5
+HUD = pygame.Surface((screen_width,100),0,32)
+dialogue_number = 0
+cur = (0,0)
+selected = None
+
+class Npc:
+    def __init__(self,x,y,width,height):
+        self.x = x
+        self.y = y
+        self.width = width
+        self.height = height
+        self.exists = True
+        self.type = "npc"
+        self.faction = "ally"
+        self.rect = None
+        self.hp = 10
+        self.speed = 5
+        self.moving = False
+    def draw(self):
+        b = pygame.sprite.Sprite()
+        b.image = pygame.image.load("soldier.png").convert()
+        b.image.set_colorkey((0,0,0))
+
+        target = get_target(self)
+        if target != 0:
+            angle = math.degrees(math.atan2(self.x - target[0], self.y - target[1])) + 90
+            b.image = pygame.transform.rotate(b.image,angle)
+            self.shoot(target)
+
+        if self.moving != False:
+            if abs(self.x - self.moving[0]) < 1 and abs(self.y - self.moving[1]) < 1:
+                self.moving = False
+            else:
+                self.move(self.moving)
+                if target == 0:
+                    angle = math.degrees(math.atan2(self.x - self.moving[0], self.y - self.moving[1])) + 90
+                    b.image = pygame.transform.rotate(b.image,angle)
+        if self.hp <= 0:
+            objects.remove(self)
+            return
+
+        healthbar = pygame.Rect((self.x - 5,self.y - 20),(self.hp * 3.5,5))
+        pygame.draw.rect(window,(255,0,0),healthbar)
+        b.image = pygame.transform.smoothscale(b.image,(50,50))
+        b.rect = b.image.get_rect()
+        b.rect.topleft = [self.x - 20, self.y - 20]
+        window.blit(b.image, b.rect)
+    def shoot(self,target):
+        distance = (self.x - target[0],self.y - target[1])
+        chance = random.randint(0,5)
+        if chance == 1:
+            bullets = pygame.draw.line(window, (255,200,0), (self.x,self.y),(target[0] + distance[0]/1.5,target[1] + distance[1]/1.5))
+    def move(self,dest):
+        distance = [dest[0] - self.x, dest[1] - self.y]
+        norm = math.sqrt(distance[0] ** 2 + distance[1] ** 2)
+        direction = [distance[0] / norm, distance[1] / norm]
+        vector = [direction[0] * self.speed, direction[1] * self.speed]
+        self.x += vector[0]
+        self.y += vector[1]
+        
+class Wall:
+    def __init__(self,x,y,width,height):
+        self.x = x
+        self.y = y
+        self.width = width
+        self.height = height
+        self.exists = True
+        self.type = "wall"
+        self.name = "wall"
+        self.rect = None
+        
+    def draw(self):
+        self.rect = pygame.Rect((self.x + offsetx,self.y + offsety),(self.width,self.height))
+        pygame.draw.rect(window,(0,0,0),self.rect)
+
+
+def make_grid(number_of_linesx,number_of_linesy,tile_size,x,y):
+    index = 0
+    grid_lengthx = number_of_linesy * tile_size
+    grid_lengthy = number_of_linesx * tile_size
+    while index < number_of_linesy:
+        pygame.draw.line(window,(0,0,0),(x,y),(x + grid_lengthx, y),1)
+        pygame.draw.line(window,(0,0,0),(200,300),(300, 300),1)
+        y += tile_size
+        index += 1
+    index = 0
+    x = 0
+    y = 0
+    while index < number_of_linesx:
+        pygame.draw.line(window,(0,0,0),(x,y),(x, y + grid_lengthy),1)
+        x += tile_size
+        index += 1
+
+def coords_to_tile(x,y):
+    index = 0
+    tilex = 0 
+    while index < x:
+        tilex += 1
+        index += grid_tile_size
+    index = 0
+    tiley = 0 
+    while index < y:
+        tiley += 1
+        index += grid_tile_size    
+    return tilex,tiley
+
+def check_player_collision():
+    for i in objects:
+        if i.type == "player":
+            if i.rect != None:
+                for j in objects:
+                    if j.rect != None and j.rect != i.rect:
+                        if i.rect.colliderect(j.rect):
+                            return j
+
+def tile_to_coords(tilex,tiley):
+    x = (tilex * grid_tile_size) - grid_tile_size
+    y = (tiley * grid_tile_size) - grid_tile_size
+    return x,y
+
+
+def save_game():
+    game_state = objects
+    with open("new game map.py", "wb") as f:
+        pickle.dump(game_state, f)
+
+def load_game(loc):
+    objects = []
+    if loc == "town":
+        with open("new game map.py", "rb") as f:
+            game_state = pickle.load(f)
+            global objects
+            objects = game_state
+            for i in objects:
+                if i.type == "npc":
+                    npclist.append(i)
+            
+
+def wipe_screen():
+    global objects
+    objects = []
+
+def handle_events():
+    keys_pressed = pygame.key.get_pressed()
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            quit() 
+
+
+        elif event.type == pygame.MOUSEMOTION:
+            global cur
+            cur = event.pos
+
+
+
+        elif event.type == pygame.MOUSEBUTTONDOWN:
+
+            cursor = event.pos
+            click = pygame.mouse.get_pressed()
+            x,y = cursor
+            #if click == (1,0,0):
+             #   place_wall(x,y)
+            #if click == (0,0,1):
+             #   remove_wall(x,y)
+            if click == (1,0,0):
+                if selected == None:
+                    for i in objects:
+                        if i.type == "npc":
+                            if i.faction == "ally":
+                                if i.x < (x + 50) and i.x > (x - 50):
+                                    if i.y < (y + 50) and i.y > (y - 50):
+                                        global selected
+                                        selected = i
+                elif selected != None:
+                    selected.moving = cursor
+                    global selected
+                    selected = None
+                                
+        if keys_pressed[pygame.K_g]:
+            x,y = pygame.mouse.get_pos()
+            place_npc(x,y)
+
+
+    for i in objects:
+        if i.type == "player":
+            player = i
+            if keys_pressed[pygame.K_LEFT] or keys_pressed[pygame.K_a]:
+                player.move(-1,0)
+            if keys_pressed[pygame.K_RIGHT] or keys_pressed[pygame.K_d]:
+                player.move(1,0)
+            if keys_pressed[pygame.K_UP] or keys_pressed[pygame.K_w]:
+                player.move(0,-1)
+            if keys_pressed[pygame.K_DOWN] or keys_pressed[pygame.K_s]:
+               player.move(0,1)
+
+    if keys_pressed[pygame.K_SPACE]:
+        save_game()
+    if keys_pressed[pygame.K_TAB]:
+        wipe_screen()
+
+def get_target(npc):
+    for i in objects:
+        if i.type == "npc":
+            if i != npc:
+                if i.faction != npc.faction:
+                    dist = math.hypot(i.x - npc.x, i.y - npc.y)
+                    if dist < 200:
+                        if random.randint(1,10)<=1:
+                            i.hp -= 1
+                        return (i.x,i.y)
+    return 0
+
+
+def place_npc(x,y):
+    tilex,tiley = coords_to_tile(x,y)
+    x,y = tile_to_coords(tilex,tiley)
+    npc = Npc(x,y,grid_tile_size * 4,grid_tile_size * 4)
+    objects.append(npc)
+def place_wall(x,y):
+    tilex,tiley = coords_to_tile(x,y)
+    x,y = tile_to_coords(tilex,tiley)
+    wall = Wall(x,y,grid_tile_size * 150,grid_tile_size * 20)
+    objects.append(wall)
+def remove_wall(x,y):
+    tilex,tiley = coords_to_tile(x,y)
+    x,y = tile_to_coords(tilex,tiley)
+    for i in objects:
+        if (i.x,i.y) == (x,y):
+            objects.remove(i)
+
+def draw():
+    window.fill((255,255,255))
+    for i in objects:
+        i.draw()
+    pygame.display.update()
+    clock.tick(60)
+    
+def run():
+    load_game("town")
+    while True:
+        handle_events()
+        draw()
+
+run()
