@@ -19,6 +19,10 @@ dialogue_number = 0
 cur = (0,0)
 selected = None
 
+img = pygame.image.load("soldier.png").convert()
+img.set_colorkey((0,0,0))
+img = pygame.transform.smoothscale(img,(50,50))
+
 class Npc:
     def __init__(self,x,y,width,height):
         self.x = x
@@ -27,20 +31,18 @@ class Npc:
         self.height = height
         self.exists = True
         self.type = "npc"
-        self.faction = "ally"
+        self.faction = "enemy"
         self.rect = None
         self.hp = 10
         self.speed = 5
         self.moving = False
         self.sprite = pygame.sprite.Sprite()
-        self.sprite.image = pygame.image.load("soldier.png").convert()
-        self.sprite.image.set_colorkey((0,0,0))
-        self.sprite.image = pygame.transform.smoothscale(self.sprite.image,(50,50))
     def draw(self):
+        image = img
         target = get_target(self)
         if target != 0:
             angle = math.degrees(math.atan2(self.x - target[0], self.y - target[1])) + 90
-            self.sprite.image = pygame.transform.rotate(self.sprite.image,angle)
+            image = pygame.transform.rotate(image,angle)
             self.shoot(target)
         if self.moving != False:
             if abs(self.x - self.moving[0]) < 3 and abs(self.y - self.moving[1]) < 3:
@@ -49,16 +51,16 @@ class Npc:
                 self.move(self.moving)
                 if target == 0:
                     angle = math.degrees(math.atan2(self.x - self.moving[0], self.y - self.moving[1])) + 90
-                    pygame.transform.rotate(self.sprite.image,angle)
+                    image = pygame.transform.rotate(image,angle)
         if self.hp <= 0:
             objects.remove(self)
             return
 
         healthbar = pygame.Rect((self.x - 5,self.y - 20),(self.hp * 3.5,5))
         pygame.draw.rect(window,(255,0,0),healthbar)
-        self.sprite.rect = self.sprite.image.get_rect()
+        self.sprite.rect = image.get_rect()
         self.sprite.rect.topleft = [self.x - 20, self.y - 20]
-        window.blit(self.sprite.image, self.sprite.rect)
+        window.blit(image, self.sprite.rect)
     def shoot(self,target):
         distance = (self.x - target[0],self.y - target[1])
         chance = random.randint(0,5)
@@ -86,6 +88,7 @@ class Wall:
     def draw(self):
         self.rect = pygame.Rect((self.x + offsetx,self.y + offsety),(self.width,self.height))
         pygame.draw.rect(window,(0,0,0),self.rect)
+
 
 
 def make_grid(number_of_linesx,number_of_linesy,tile_size,x,y):
