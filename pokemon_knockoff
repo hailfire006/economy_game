@@ -1,0 +1,420 @@
+import pygame
+import time
+import random
+import pickle
+pygame.init()
+pygame.font.init()
+clock = pygame.time.Clock()
+screen_width = 1100
+screen_height = 600
+grid_tile_size = 5
+window = pygame.display.set_mode((screen_width,screen_height),0,32)
+objects = []
+map_color = (100,100,100)
+HUD = pygame.Surface((screen_width,100),0,32)
+zoom = 1
+offsetx = 0
+offsety = 0
+current_map = "easel town buildings"
+
+def load_sprite(string):
+    img = pygame.image.load(string).convert()
+    img.set_colorkey((0,0,0))
+    img = pygame.transform.smoothscale(img,(50,50))
+    return img
+
+
+
+class Pokemon:
+    def __init__(self,x,y,width,height):
+        self.x = x
+        self.y = y
+        self.width = width
+        self.height = height
+        self.type = "wall"
+        self.rect = None
+        self.sprite = pygame.sprite.Sprite()
+    def draw(self):
+        self.rect = pygame.Rect(((self.x + offsetx),(self.y + offsety)),(self.width, self.height))
+        image = load_sprite("charmander_front.png")
+        self.sprite.rect = image.get_rect()
+        self.sprite.rect.topleft = [self.x, self.y]
+        window.blit(image, self.sprite.rect)
+
+class Player:
+    def __init__(self,x,y,name):
+        self.x = x
+        self.y = y
+        self.type = "player"
+        self.name = name
+        self.speed = 5
+        self.rect = None
+        self.height = 30
+        self.width = 30
+        self.sprite = pygame.sprite.Sprite()
+    def move(self,speedx,speedy):    
+        collide = check_player_collision()
+        if collide == None:
+            self.x += (speedx * self.speed)
+            self.y += (speedy * self.speed)
+        elif collide.type == "door":
+            load_game(collide.location)
+        elif collide.type == "wall":
+            if collide.direction == "up":
+                self.y -= self.speed/2
+            if collide.direction == "down":
+                self.y += self.speed/2
+            if collide.direction == "left":
+                self.x -= self.speed/2
+            if collide.direction == "right":
+                self.x += self.speed/2
+        elif collide.type == "npc":
+            self.x += (speedx * self.speed)
+            self.y += (speedy * self.speed)
+            if collide.npc_type == "grass.jpg":
+                n = random.randint(1,17)
+                if n == 1:
+                    print "battle"
+                collide.npc_type = "grass_parted.jpg"
+                
+    def draw(self):
+        self.rect = pygame.Rect(((self.x + offsetx),(self.y + offsety)),(self.width, self.height))
+        image = load_sprite("mc_down.png")
+        self.sprite.rect = image.get_rect()
+        self.sprite.rect.topleft = [self.x + offsetx, self.y + offsety]
+        window.blit(image, self.sprite.rect)
+        #pygame.draw.rect(window,(10,10,10),self.rect)
+
+
+class Npc:
+    def __init__(self,x,y,name):
+        self.x = x
+        self.y = y
+        self.type = "npc"
+        self.npc_type = "grass.jpg"
+        self.name = name
+        self.speed = 5
+        self.rect = None
+        self.sprite = pygame.sprite.Sprite()
+    def draw(self):
+        self.rect = pygame.Rect(((self.x + offsetx),(self.y + offsety)),(30, 30))
+        image = load_sprite(self.npc_type)
+        self.sprite.rect = image.get_rect()
+        self.sprite.rect.topleft = [self.x - 10 + offsetx, self.y - 10 + offsety]
+        window.blit(image, self.sprite.rect)
+        #pygame.draw.rect(window,(10,10,10),self.rect)
+        if self.type == "npc":
+            if self.npc_type == "grass_parted.jpg":
+                collide = check_player_collision() 
+                if collide != self:
+                    self.npc_type = "grass.jpg"
+
+class Wall:
+    def __init__(self,x,y,width,height,direction):
+        self.x = x
+        self.y = y
+        self.width = width
+        self.height = height
+        self.type = "wall"
+        self.rect = None
+        self.direction = direction
+    def draw(self):
+        self.rect = pygame.Rect((self.x + offsetx,self.y + offsety),(self.width,self.height))
+        pygame.draw.rect(window,(10,10,10),self.rect)
+
+def coords_to_tile(x,y):
+    index = 0
+    tilex = 0 
+    while index < x:
+        tilex += 1
+        index += grid_tile_size
+    index = 0
+    tiley = 0 
+    while index < y:
+        tiley += 1
+        index += grid_tile_size    
+    return tilex,tiley
+
+class Door:
+    def __init__(self,x,y,width,height):
+        self.x = x
+        self.y = y
+        self.width = width
+        self.height = height
+        self.type = "door"
+        self.location = "easel town buildings"
+    def draw(self):
+        self.rect = pygame.Rect((self.x + offsetx,self.y + offsety),(self.width,self.height))
+        pygame.draw.rect(window,(255,224,79),self.rect)
+
+
+def tile_to_coords(tilex,tiley):
+    x = (tilex * grid_tile_size) - grid_tile_size
+    y = (tiley * grid_tile_size) - grid_tile_size
+    return x,y
+
+def save_game():
+    game_state = objects
+    with open(current_map + ".py", "wb") as f:
+        pickle.dump(game_state, f)
+    print current_map
+def load_game(level):
+    objects = []
+    if level == "easel town buildings":
+        for i in objects:
+            if i.type == "player":
+                i.y += 100
+        with open("easel town buildings.py", "rb") as f:
+            game_state = pickle.load(f)
+        global map_color
+        map_color = (100,100,100)
+    elif level == "easel town":
+        with open("easel town.py", "rb") as f:
+            game_state = pickle.load(f)
+        global map_color
+        map_color = (200,255,204)
+    global objects
+    objects = game_state
+    for i in objects:
+        if i.type == "player":
+            for j in objects:
+                if j.type == "door":
+                    i.x = j.x
+                    i.y = j.y
+                    if j.location != "easel town buildings":
+                        i.y -= 50
+                    elif j.location != "easel town":
+                        i.y += 20
+    global current_map
+    current_map = level
+def wipe_screen():
+    global objects
+    objects = []
+
+def place_npc(x,y):
+    tilex,tiley = coords_to_tile(x,y)
+    x,y = tile_to_coords(tilex,tiley)
+    x -= offsetx
+    y -= offsety
+    npc = Npc(x,y,"Professor Acorn")
+    objects.append(npc)
+def place_wall(x,y):
+    tilex,tiley = coords_to_tile(x,y)
+    x,y = tile_to_coords(tilex,tiley)
+    x -= offsetx
+    y -= offsety
+    wall = Wall(x,y,grid_tile_size * 45,grid_tile_size * 78,"down")
+    objects.append(wall)
+    print "wall placed"
+def place_door(x,y):
+    tilex,tiley = coords_to_tile(x,y)
+    x,y = tile_to_coords(tilex,tiley)
+    x -= offsetx
+    y -= offsety
+    door = Door(x,y,grid_tile_size * 6,grid_tile_size * 4)
+    objects.append(door)
+
+def remove_wall(x,y):
+    tilex,tiley = coords_to_tile(x,y)
+    x,y = tile_to_coords(tilex,tiley)
+    x -= offsetx
+    y -= offsety
+    for i in objects:
+        if (i.x,i.y) == (x,y):
+            objects.remove(i)
+
+def check_player_collision():
+    for i in objects:
+        if i.type == "player":
+            if i.rect != None:
+                for j in objects:
+                    if j.rect != None and j.rect != i.rect:
+                        if i.rect.colliderect(j.rect):
+                            return j
+                            
+    return None
+
+def Zoom():
+    for i in objects:
+        if i.type != "player":
+            i.x = i.x * zoom
+            i.y = i.y * zoom
+            i.width = i.width * zoom
+            i.height = i.height * zoom
+
+def scroll():
+    for i in objects:
+        if i.type == "player":
+            player = i
+            global offsetx
+            global offsety
+            if (player.x + offsetx) > (screen_width - 400):
+                qty = (player.speed)
+                offsetx -= qty
+            if player.x + offsetx < 400:
+                qty = (player.speed)
+                offsetx += qty           
+            if (player.y + offsety) > (screen_height - 400):
+                qty = (player.speed)
+                offsety -= qty
+            if player.y + offsety < 400:
+                qty = (player.speed)
+                offsety += qty
+
+def handle_events():
+    keys_pressed = pygame.key.get_pressed()
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            quit() 
+###DEVKEYS
+
+        elif event.type == pygame.MOUSEBUTTONDOWN:
+            cur = event.pos
+            click = pygame.mouse.get_pressed()
+            x,y = cur
+            if click == (1,0,0):
+                place_npc(x,y)
+            if click == (0,0,1):
+                remove_wall(x,y)
+            if keys_pressed[pygame.K_g]:
+                x,y = pygame.mouse.get_pos()
+                place_npc(x,y)
+    if keys_pressed[pygame.K_SPACE]:
+        save_game()
+    if keys_pressed[pygame.K_TAB]:
+        wipe_screen()
+###END DEVKEYS
+
+    for i in objects:
+        if i.type == "player":
+            player = i
+            if keys_pressed[pygame.K_LEFT] or keys_pressed[pygame.K_a]:
+                player.move(-1,0)
+            if keys_pressed[pygame.K_RIGHT] or keys_pressed[pygame.K_d]:
+                player.move(1,0)
+            if keys_pressed[pygame.K_UP] or keys_pressed[pygame.K_w]:
+                player.move(0,-1)
+            if keys_pressed[pygame.K_DOWN] or keys_pressed[pygame.K_s]:
+               player.move(0,1)
+
+
+def draw():
+    window.fill(map_color)
+    for i in objects:
+        if i.type != "player":
+            i.draw()
+    for i in objects:
+        if i.type == "player":
+            i.draw()
+    pygame.display.update()
+    clock.tick(60)
+     
+
+def run(name):
+    load_game("easel town buildings")
+    for i in objects:
+        if i.type == "player":
+            objects.remove(i)
+    player = Player(screen_width/2,screen_height/2,name)
+    objects.append(player)
+    #save_game()
+    window.fill(map_color)
+    while True:
+        scroll()
+        handle_events()
+        draw()
+############################  battle code  ##############################
+#########################################################################
+def draw_battle(dx,dy):
+    cursor_points = (830 + dx,35 + dy),(820 + dx,25 + dy),(820 + dx,45 + dy)
+    
+    string = "hai"
+    window.fill((255,255,255))
+    font = pygame.font.Font(None,50)
+    text = font.render(string,1,(0,0,0))
+    text_box = pygame.Surface((screen_width,150),1,32)
+    text_box.fill((255,255,255))
+    pygame.draw.rect(text_box,(0,0,0),((0,0),(screen_width,150)),10)
+    pygame.draw.rect(text_box,(0,0,0),((800,0),(screen_width - 600,150)),10)
+    
+    POKE = font.render("PoKe",1,(0,0,0))
+    FIGHT = font.render("FIGHT",1,(0,0,0))
+    PACK = font.render("PACK",1,(0,0,0))
+    RUN = font.render("RUN",1,(0,0,0))
+    
+    text_box.blit(FIGHT,(850,20))
+    text_box.blit(POKE,(990,20))
+    text_box.blit(PACK,(850,90))
+    text_box.blit(RUN,(990,90))
+    text_box.blit(text,(20,20))
+    pygame.draw.polygon(text_box,(0,0,0),(cursor_points))
+
+    window.blit(text_box,(0,screen_height - 150))                    
+    pygame.display.update()
+def handle_battle_events(dx,dy):
+    keys_pressed = pygame.key.get_pressed()
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            quit()
+        if keys_pressed[pygame.K_LEFT]:
+            if dx == 150:
+                dx -= 150
+        if keys_pressed[pygame.K_RIGHT]:
+            if dx != 150:
+                dx += 150
+        if keys_pressed[pygame.K_UP]:
+            if dy == 70:
+                dy -= 70
+        if keys_pressed[pygame.K_DOWN]:
+            if dy != 70:
+                dy += 70
+    return dx,dy
+def start_battle():
+    dx = 0
+    dy = 0
+    while True:
+        dx,dy = handle_battle_events(dx,dy)
+        draw_battle(dx,dy)
+
+############################ end battle code ############################
+#########################################################################
+def run_name_prompt():
+    font = pygame.font.Font(None,30)
+    img = font.render("What is your name?",1,(0,0,0))
+    typing = True
+    name = ""
+    while typing == True:
+        window.fill((200,200,200))
+        window.blit(img,((300,200)))
+        box = pygame.Surface((200,40),0,32)
+        keys_pressed = pygame.key.get_pressed()
+        for event in pygame.event.get():
+            if event.type == pygame.KEYDOWN:
+                try:
+                    character = chr(event.key)
+                    if event.key == 13:
+                        typing = False
+                        break
+                    name += str(character)
+                except ValueError:
+                    pass
+                    
+        name_text = font.render(name,1,(255,255,0))
+        box.blit(name_text,(0,0))
+        window.blit(box,(300,300))
+        pygame.display.update()
+    window.fill((200,200,200))
+    img = font.render("Okay, so your name is " + name + ".",1,(0,0,0))
+    window.blit(img,((300,200)))
+    pygame.display.update()
+    #time.sleep(2)
+    window.fill((200,200,200))
+    img = font.render("It's time to begin your adventure, " + name + ". Welcome to the wonderful world of monster battlers!",1,(0,0,0))
+    window.blit(img,((10,200)))
+    pygame.display.update()
+    #time.sleep(4)
+    run(name)
+
+start_battle()
+run_name_prompt()
+
